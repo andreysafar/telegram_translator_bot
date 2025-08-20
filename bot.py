@@ -57,10 +57,10 @@ class TelegramTranslatorBot:
 /lang <ru|th|en> - установить родной язык
 /help - справка
 
-**Для администраторов:**
-/config - настройки бота (только для админов)
-/enable - включить бота в группе
-/disable - выключить бота в группе
+**Для администраторов бота:**
+/config - настройки бота (только для админов бота)
+/enable - включить бота в группе (только для админов бота)
+/disable - выключить бота в группе (только для админов бота)
 
 Добавьте меня в групповой чат и я буду переводить все сообщения!
             """
@@ -68,7 +68,7 @@ class TelegramTranslatorBot:
             welcome_message = f"""
 🤖 Бот-переводчик запущен в группе!
 
-Для работы бота администратор группы должен выполнить команду /enable
+Для работы бота администратор бота должен выполнить команду /enable
             """
         
         await update.message.reply_text(welcome_message)
@@ -88,10 +88,10 @@ class TelegramTranslatorBot:
 /lang <ru|th|en> - установить родной язык
 /help - эта справка
 
-**Команды для администраторов:**
-/config - настройки модели (только админы)
-/enable - включить бота в группе
-/disable - выключить бота в группе
+**Команды для администраторов бота:**
+/config - настройки модели (только админы бота)
+/enable - включить бота в группе (только админы бота)
+/disable - выключить бота в группе (только админы бота)
 
 **Как работает перевод:**
 1. 📥 Получаю ваше сообщение
@@ -136,12 +136,11 @@ class TelegramTranslatorBot:
     async def config_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /config command - admin only"""
         user = update.effective_user
-        chat = update.effective_chat
         
-        # Check if user is in admin list
+        # Check if user is bot admin
         if user.id not in ADMIN_USER_IDS:
             await update.message.reply_text(
-                "❌ Команда /config доступна только администраторам"
+                "❌ Команда /config доступна только администраторам бота"
             )
             return
         
@@ -228,17 +227,16 @@ class TelegramTranslatorBot:
         chat = update.effective_chat
         user = update.effective_user
         
-        if chat.type == 'private':
+        # Check if user is bot admin
+        if user.id not in ADMIN_USER_IDS:
             await update.message.reply_text(
-                "❌ Команда /enable работает только в групповых чатах"
+                "❌ Команда /enable доступна только администраторам бота"
             )
             return
         
-        # Check if user is admin
-        chat_member = await context.bot.get_chat_member(chat.id, user.id)
-        if chat_member.status not in ['administrator', 'creator']:
+        if chat.type == 'private':
             await update.message.reply_text(
-                "❌ Команда /enable доступна только администраторам группы"
+                "❌ Команда /enable работает только в групповых чатах"
             )
             return
         
@@ -252,17 +250,16 @@ class TelegramTranslatorBot:
         chat = update.effective_chat
         user = update.effective_user
         
-        if chat.type == 'private':
+        # Check if user is bot admin
+        if user.id not in ADMIN_USER_IDS:
             await update.message.reply_text(
-                "❌ Команда /disable работает только в групповых чатах"
+                "❌ Команда /disable доступна только администраторам бота"
             )
             return
         
-        # Check if user is admin
-        chat_member = await context.bot.get_chat_member(chat.id, user.id)
-        if chat_member.status not in ['administrator', 'creator']:
+        if chat.type == 'private':
             await update.message.reply_text(
-                "❌ Команда /disable доступна только администраторам группы"
+                "❌ Команда /disable работает только в групповых чатах"
             )
             return
         
