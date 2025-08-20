@@ -450,15 +450,8 @@ English text to translate: {results['english_translation']}"""
 
                 logger.info("Opening audio file and sending to API...")
                 with open(audio_file_path, 'rb') as audio_file:
-                    # Use direct OpenAI API for Whisper
-                    import openai
-                    client = openai.OpenAI(
-                        api_key=os.getenv('OPENROUTER_API_KEY'),
-                        base_url="https://api.openai.com/v1"  # Use direct OpenAI API
-                    )
-                    
-                    response = client.audio.transcriptions.create(
-                        model=model.split('/')[-1],  # Remove 'openai/' prefix
+                    response = self.client.audio.transcriptions.create(
+                        model=model,  # Keep full model name with prefix
                         file=audio_file,
                         response_format="text"
                     )
