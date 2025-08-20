@@ -26,7 +26,7 @@ SUPPORTED_LANGUAGES = {
 
 # Default models
 DEFAULT_TRANSLATION_MODEL = "anthropic/claude-3.5-sonnet"
-DEFAULT_STT_MODEL = "openai/whisper-large-v3"
+DEFAULT_STT_MODEL = "anthropic/claude-3-opus"  # Supports audio input
 
 # Available models for user selection
 AVAILABLE_TRANSLATION_MODELS = [
@@ -38,7 +38,8 @@ AVAILABLE_TRANSLATION_MODELS = [
 ]
 
 AVAILABLE_STT_MODELS = [
-    "google/gemini-2.0-flash-001",
-    "openai/whisper-large-v3"
+    "anthropic/claude-3-opus",  # Best audio support
+    "anthropic/claude-3-sonnet",
+    "anthropic/claude-3-haiku"
 ]
 
