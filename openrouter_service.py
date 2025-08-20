@@ -30,7 +30,7 @@ class OpenRouterService:
             
             prompt = f"Translate to English:\n\n{text}"
             
-            logger.info(f"Translating from {source_lang_name} to English")
+            logger.info(f"Translating from {SUPPORTED_LANGUAGES[source_lang]} to English")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
             
             response = self.client.chat.completions.create(
@@ -77,7 +77,7 @@ class OpenRouterService:
             
             prompt = f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{text}"
             
-            logger.info(f"Translating from English to {target_lang_name}")
+            logger.info(f"Translating from English to {SUPPORTED_LANGUAGES[target_lang]}")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
             
             response = self.client.chat.completions.create(
