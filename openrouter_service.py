@@ -1,6 +1,7 @@
 import openai
 import os
 import logging
+import base64
 from typing import Optional, Dict
 from config import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, SUPPORTED_LANGUAGES
 
@@ -449,16 +450,13 @@ English text to translate: {results['english_translation']}"""
                     logger.warning(f"File format {file_ext} might not be supported. Supported formats: {', '.join(supported_formats)}")
 
                 logger.info("Opening audio file and sending to API...")
-
-                # Read and base64 encode the audio file
-                import base64
+                # Convert audio to base64
                 with open(audio_file_path, 'rb') as audio_file:
-                    audio_data = audio_file.read()
-                    base64_audio = base64.b64encode(audio_data).decode('utf-8')
+                    audio_base64 = base64.b64encode(audio_file.read()).decode('utf-8')
 
-                # Use chat/completions with input_audio format
+                # Create chat completion request with audio
                 response = self.client.chat.completions.create(
-                    model=model,  # Keep full model name with prefix
+                    model=model,
                     messages=[
                         {
                             "role": "user",
@@ -470,30 +468,26 @@ English text to translate: {results['english_translation']}"""
                                 {
                                     "type": "input_audio",
                                     "input_audio": {
-                                        "data": base64_audio,
-                                        "format": "mp3"  # Always MP3 since we convert OGG to MP3
+                                        "data": audio_base64,
+                                        "format": "mp3"  # We converted to MP3 earlier
                                     }
                                 }
                             ]
                         }
-                    ],
-                    temperature=0.1,
-                    max_tokens=1000
+                    ]
                 )
                 
                 logger.info("Got response from API")
                 logger.debug(f"Raw response type: {type(response)}")
 
-                if isinstance(response, str):
-                    result = response.strip()
+                if response.choices and response.choices[0].message:
+                    result = response.choices[0].message.content.strip()
                     logger.info(f"Successfully transcribed audio to text (length: {len(result)})")
                     logger.debug(f"Transcription result: {result[:100]}..." if len(result) > 100 else f"Transcription result: {result}")
                     return result
                 else:
-                    result = str(response).strip()
-                    logger.warning(f"Unexpected response type: {type(response)}, converting to string")
-                    logger.debug(f"Converted result: {result[:100]}..." if len(result) > 100 else f"Converted result: {result}")
-                    return result
+                    logger.error("No valid response content")
+                    return None
 
             finally:
                 # Cleanup temporary file if it was created
