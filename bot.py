@@ -414,14 +414,9 @@ class TelegramTranslatorBot:
         
         source_lang = result['source_language']
         target_lang = result['target_language']
-        source_lang_name = self.language_detector.get_language_name(source_lang)
-        target_lang_name = self.language_detector.get_language_name(target_lang)
         
         # Build message parts
-        message_parts = [
-            f"🔄 **Перевод** ({source_lang_name} → {target_lang_name})",
-            ""
-        ]
+        message_parts = []
         
         # Always show English translation
         if source_lang == 'en':
@@ -435,7 +430,7 @@ class TelegramTranslatorBot:
         if target_lang != 'en':
             message_parts.append(f"{FLAGS[target_lang]} {result['final_translation']}")
         
-        # Add empty line before control translation
+        # Add empty line before original text
         message_parts.append("")
         
         # Show original text with flag

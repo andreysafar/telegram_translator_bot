@@ -28,8 +28,7 @@ class OpenRouterService:
             if source_lang == 'en':
                 return text
             
-            source_lang_name = SUPPORTED_LANGUAGES[source_lang]
-            prompt = f"Translate this {source_lang_name} text to English:\n\n{text}"
+            prompt = f"Translate to English:\n\n{text}"
             
             logger.info(f"Translating from {source_lang_name} to English")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
@@ -76,8 +75,7 @@ class OpenRouterService:
             if target_lang == 'en':
                 return text
             
-            target_lang_name = SUPPORTED_LANGUAGES[target_lang]
-            prompt = f"Translate this English text to {target_lang_name}:\n\n{text}"
+            prompt = f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{text}"
             
             logger.info(f"Translating from English to {target_lang_name}")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
