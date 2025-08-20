@@ -474,11 +474,7 @@ English text to translate: {results['english_translation']}"""
                                 }
                             ]
                         }
-                    ],
-                    headers={
-                        "HTTP-Referer": "https://github.com/andreysafar/telegram_translator_bot",
-                        "X-Title": "Telegram Translator Bot"
-                    }
+                    ]
                 )
                 
                 logger.info("Got response from API")
