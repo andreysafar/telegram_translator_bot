@@ -420,32 +420,71 @@ English text to translate: {results['english_translation']}"""
                 logger.error("Audio file is empty")
                 return None
 
-            # Supported formats check
-            supported_formats = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm']
-            if file_ext not in supported_formats:
-                logger.warning(f"File format {file_ext} might not be supported. Supported formats: {', '.join(supported_formats)}")
+            # Convert OGG to MP3 if needed
+            temp_file = None
+            try:
+                if file_ext in ['.ogg', '.oga']:
+                    import subprocess
+                    temp_file = audio_file_path.rsplit('.', 1)[0] + '.mp3'
+                    logger.info(f"Converting {file_ext} to MP3: {temp_file}")
+                    
+                    # Use ffmpeg to convert
+                    result = subprocess.run([
+                        'ffmpeg', '-i', audio_file_path,
+                        '-acodec', 'libmp3lame',
+                        '-y',  # Overwrite output file if exists
+                        temp_file
+                    ], capture_output=True, text=True)
+                    
+                    if result.returncode != 0:
+                        logger.error(f"FFmpeg conversion failed: {result.stderr}")
+                        return None
+                    
+                    audio_file_path = temp_file
+                    logger.info("Conversion successful")
 
-            logger.info("Opening audio file and sending to API...")
-            with open(audio_file_path, 'rb') as audio_file:
-                response = self.client.audio.transcriptions.create(
-                    model=model,
-                    file=audio_file,
-                    response_format="text"
-                )
-            
-            logger.info("Got response from API")
-            logger.debug(f"Raw response type: {type(response)}")
+                # Supported formats check
+                supported_formats = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm']
+                if os.path.splitext(audio_file_path)[1].lower() not in supported_formats:
+                    logger.warning(f"File format {file_ext} might not be supported. Supported formats: {', '.join(supported_formats)}")
 
-            if isinstance(response, str):
-                result = response.strip()
-                logger.info(f"Successfully transcribed audio to text (length: {len(result)})")
-                logger.debug(f"Transcription result: {result[:100]}..." if len(result) > 100 else f"Transcription result: {result}")
-                return result
-            else:
-                result = str(response).strip()
-                logger.warning(f"Unexpected response type: {type(response)}, converting to string")
-                logger.debug(f"Converted result: {result[:100]}..." if len(result) > 100 else f"Converted result: {result}")
-                return result
+                logger.info("Opening audio file and sending to API...")
+                with open(audio_file_path, 'rb') as audio_file:
+                    # Use direct OpenAI API for Whisper
+                    import openai
+                    client = openai.OpenAI(
+                        api_key=os.getenv('OPENROUTER_API_KEY'),
+                        base_url="https://api.openai.com/v1"  # Use direct OpenAI API
+                    )
+                    
+                    response = client.audio.transcriptions.create(
+                        model=model.split('/')[-1],  # Remove 'openai/' prefix
+                        file=audio_file,
+                        response_format="text"
+                    )
+                
+                logger.info("Got response from API")
+                logger.debug(f"Raw response type: {type(response)}")
+
+                if isinstance(response, str):
+                    result = response.strip()
+                    logger.info(f"Successfully transcribed audio to text (length: {len(result)})")
+                    logger.debug(f"Transcription result: {result[:100]}..." if len(result) > 100 else f"Transcription result: {result}")
+                    return result
+                else:
+                    result = str(response).strip()
+                    logger.warning(f"Unexpected response type: {type(response)}, converting to string")
+                    logger.debug(f"Converted result: {result[:100]}..." if len(result) > 100 else f"Converted result: {result}")
+                    return result
+
+            finally:
+                # Cleanup temporary file if it was created
+                if temp_file and os.path.exists(temp_file):
+                    try:
+                        os.remove(temp_file)
+                        logger.info(f"Cleaned up temporary file: {temp_file}")
+                    except Exception as e:
+                        logger.warning(f"Failed to cleanup temporary file: {e}")
             
         except Exception as e:
             logger.error(f"Speech-to-text error: {e}")
