@@ -405,20 +405,41 @@ class TelegramTranslatorBot:
     
     async def send_translation_result(self, update: Update, result: dict):
         """Format and send translation result"""
-        source_lang_name = self.language_detector.get_language_name(result['source_language'])
-        target_lang_name = self.language_detector.get_language_name(result['target_language'])
+        # Language flags
+        FLAGS = {
+            'ru': '🇷🇺',
+            'en': '🇬🇧',
+            'th': '🇹🇭'
+        }
         
-        # Simple format - just show the translation
+        source_lang = result['source_language']
+        target_lang = result['target_language']
+        source_lang_name = self.language_detector.get_language_name(source_lang)
+        target_lang_name = self.language_detector.get_language_name(target_lang)
+        
+        # Build message parts
         message_parts = [
             f"🔄 **Перевод** ({source_lang_name} → {target_lang_name})",
-            "",
-            f"📝 **Оригинал:** {result['original']}",
-            f"🎯 **Перевод:** {result['final_translation']}"
+            ""
         ]
         
-        # Add control translation if available
-        if result.get('control_translation'):
-            message_parts.append(f"✅ **Контроль:** {result['control_translation']}")
+        # Always show English translation
+        if source_lang == 'en':
+            message_parts.append(f"🇬🇧 {result['original']}")
+        elif target_lang == 'en':
+            message_parts.append(f"🇬🇧 {result['final_translation']}")
+        else:
+            message_parts.append(f"🇬🇧 {result['english_translation']}")
+        
+        # Show target language translation (if not English)
+        if target_lang != 'en':
+            message_parts.append(f"{FLAGS[target_lang]} {result['final_translation']}")
+        
+        # Add empty line before control translation
+        message_parts.append("")
+        
+        # Show original text with flag
+        message_parts.append(f"{FLAGS[source_lang]} {result['original']}")
         
         formatted_message = "\n".join(message_parts)
         
