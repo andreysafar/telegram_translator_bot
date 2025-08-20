@@ -3,7 +3,7 @@
     "user_id": 246484162,
     "username": "Andrey_safar",
     "translation_model": "anthropic/claude-3.5-sonnet",
-    "stt_model": "openai/whisper-large-v3",
+    "stt_model": "google/gemini-2.0-flash-001",
     "native_language": "ru"
   },
   "39486255": {

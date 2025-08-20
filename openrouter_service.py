@@ -449,12 +449,37 @@ English text to translate: {results['english_translation']}"""
                     logger.warning(f"File format {file_ext} might not be supported. Supported formats: {', '.join(supported_formats)}")
 
                 logger.info("Opening audio file and sending to API...")
+
+                # Read and base64 encode the audio file
+                import base64
                 with open(audio_file_path, 'rb') as audio_file:
-                    response = self.client.audio.transcriptions.create(
-                        model=model,  # Keep full model name with prefix
-                        file=audio_file,
-                        response_format="text"
-                    )
+                    audio_data = audio_file.read()
+                    base64_audio = base64.b64encode(audio_data).decode('utf-8')
+
+                # Use chat/completions with input_audio format
+                response = self.client.chat.completions.create(
+                    model=model,  # Keep full model name with prefix
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Please transcribe this audio file."
+                                },
+                                {
+                                    "type": "input_audio",
+                                    "input_audio": {
+                                        "data": base64_audio,
+                                        "format": "mp3"  # Always MP3 since we convert OGG to MP3
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    temperature=0.1,
+                    max_tokens=1000
+                )
                 
                 logger.info("Got response from API")
                 logger.debug(f"Raw response type: {type(response)}")

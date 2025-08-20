@@ -38,11 +38,7 @@ AVAILABLE_TRANSLATION_MODELS = [
 ]
 
 AVAILABLE_STT_MODELS = [
-    "openai/whisper-large-v3",
-    "openai/whisper-1",
-    "openai/whisper-1-tiny",
-    "openai/whisper-1-base",
-    "openai/whisper-1-small",
-    "openai/whisper-1-medium"
+    "google/gemini-2.0-flash-001",
+    "openai/whisper-large-v3"
 ]
 
