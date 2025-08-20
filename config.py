@@ -36,18 +36,6 @@ AVAILABLE_STT_MODELS = [
     "openai/whisper-1"
 ]
 
-# Translation prompts
-TRANSLATION_PROMPTS = {
-    'to_english': """Translate the following text to English. Provide only the translation without any additional text or explanations:
-
-{text}""",
-    
-    'from_english': """Translate the following English text to {target_language}. Provide only the translation without any additional text or explanations:
-
-{text}""",
-    
-    'control_translation': """Translate the following {source_language} text back to {target_language} to verify accuracy. Provide only the translation without any additional text or explanations:
-
-{text}"""
-}
+# Admin user IDs (add your Telegram user ID here)
+ADMIN_USER_IDS = []  # Add your user IDs here, e.g. [123456789, 987654321]
 
