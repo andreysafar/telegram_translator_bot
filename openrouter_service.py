@@ -450,10 +450,16 @@ English text to translate: {results['english_translation']}"""
 
                 logger.info("Opening audio file and sending to API...")
                 with open(audio_file_path, 'rb') as audio_file:
+                    # Add OpenRouter required headers
+                    headers = {
+                        "HTTP-Referer": "https://github.com/safar",  # Replace with your referer
+                        "X-Title": "Telegram Translator Bot"  # Replace with your title
+                    }
                     response = self.client.audio.transcriptions.create(
                         model=model,  # Keep full model name with prefix
                         file=audio_file,
-                        response_format="text"
+                        response_format="text",
+                        headers=headers
                     )
                 
                 logger.info("Got response from API")
