@@ -403,6 +403,29 @@ English text to translate: {results['english_translation']}"""
     def speech_to_text(self, audio_file_path: str, model: str) -> Optional[str]:
         """Convert speech to text using Whisper model"""
         try:
+            logger.info(f"Starting speech-to-text with model: {model}")
+            logger.info(f"Audio file path: {audio_file_path}")
+
+            # Check if file exists
+            if not os.path.exists(audio_file_path):
+                logger.error(f"Audio file not found: {audio_file_path}")
+                return None
+
+            # Check file size and format
+            file_size = os.path.getsize(audio_file_path)
+            file_ext = os.path.splitext(audio_file_path)[1].lower()
+            logger.info(f"Audio file size: {file_size} bytes, format: {file_ext}")
+
+            if file_size == 0:
+                logger.error("Audio file is empty")
+                return None
+
+            # Supported formats check
+            supported_formats = ['.mp3', '.mp4', '.mpeg', '.mpga', '.m4a', '.wav', '.webm']
+            if file_ext not in supported_formats:
+                logger.warning(f"File format {file_ext} might not be supported. Supported formats: {', '.join(supported_formats)}")
+
+            logger.info("Opening audio file and sending to API...")
             with open(audio_file_path, 'rb') as audio_file:
                 response = self.client.audio.transcriptions.create(
                     model=model,
@@ -410,11 +433,22 @@ English text to translate: {results['english_translation']}"""
                     response_format="text"
                 )
             
+            logger.info("Got response from API")
+            logger.debug(f"Raw response type: {type(response)}")
+
             if isinstance(response, str):
-                return response.strip()
+                result = response.strip()
+                logger.info(f"Successfully transcribed audio to text (length: {len(result)})")
+                logger.debug(f"Transcription result: {result[:100]}..." if len(result) > 100 else f"Transcription result: {result}")
+                return result
             else:
-                return str(response).strip()
+                result = str(response).strip()
+                logger.warning(f"Unexpected response type: {type(response)}, converting to string")
+                logger.debug(f"Converted result: {result[:100]}..." if len(result) > 100 else f"Converted result: {result}")
+                return result
             
         except Exception as e:
             logger.error(f"Speech-to-text error: {e}")
+            logger.error(f"Error type: {type(e)}")
+            logger.error(f"Error details: {str(e)}")
             return None
