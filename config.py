@@ -31,14 +31,19 @@ DEFAULT_STT_MODEL = "openai/whisper-large-v3"
 # Available models for user selection
 AVAILABLE_TRANSLATION_MODELS = [
     "anthropic/claude-3.5-sonnet",
-    "openai/gpt-4o",
-    "openai/gpt-4o-mini",
-    "google/gemini-pro-1.5",
-    "meta-llama/llama-3.1-70b-instruct"
+    "openai/gpt-oss-120b",
+    "google/gemini-flash-1.5-8b",
+    "google/gemini-flash-1.5",
+    "google/gemini-2.0-flash-001",
+    "google/gemini-2.0-flash-lite-001",
+    "openai/gpt-4o-mini"
 ]
 
 AVAILABLE_STT_MODELS = [
     "openai/whisper-large-v3",
-    "openai/whisper-1"
+    "openai/whisper-large-v2",
+    "openai/whisper-large",
+    "openai/whisper-medium",
+    "openai/whisper-small"
 ]
 
