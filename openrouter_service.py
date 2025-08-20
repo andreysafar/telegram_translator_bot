@@ -43,7 +43,15 @@ class OpenRouterService:
             'seems incomplete', 'cut off', 'fragment', 'фрагмент',
             'неполный', 'обрезанный', 'seems to be part',
             'for a more accurate', 'would be helpful', 'для более точного',
-            'complete phrase', 'полную фразу'
+            'complete phrase', 'полную фразу',
+            # Additional patterns for parentheses artifacts
+            'this is a', 'this is an', 'this is the',
+            'это ', 'это -', 'это значит',
+            'which means', 'which translates',
+            'который означает', 'которая означает',
+            'translation of', 'перевод',
+            'common greeting', 'распространенное приветствие',
+            'literally means', 'буквально означает'
         ]
 
         for line in lines:
@@ -261,13 +269,17 @@ Text to translate: {text}"""
                                 import json
                                 json_data = json.loads(clean_content)
                                 if 'translation' in json_data and json_data['translation']:
-                                    results['english_translation'] = json_data['translation']
+                                    clean_translation = json_data['translation'].strip()
+                                    results['english_translation'] = clean_translation
                                     results['json_success'] = True
                                     results['has_artifacts'] = False  # Reset artifacts flag since we got clean JSON
-                                    logger.info("Successfully got clean English translation from JSON")
+                                    logger.info(f"Successfully got clean English translation from JSON: {clean_translation}")
+                                    logger.debug(f"Full JSON response: {clean_content}")
                                 else:
                                     raise ValueError("No translation in JSON")
-                            except (json.JSONDecodeError, ValueError):
+                            except (json.JSONDecodeError, ValueError) as e:
+                                logger.warning(f"JSON parsing failed for English: {e}")
+                                logger.debug(f"Raw content that failed to parse: {clean_content}")
                                 results['english_translation'], _ = self.clean_translation_text(full_text)
                                 logger.info("JSON parsing failed, using text cleaning for English")
                     except Exception as e:
@@ -330,13 +342,17 @@ English text to translate: {results['english_translation']}"""
                                 import json
                                 json_data_2 = json.loads(clean_content_2)
                                 if 'translation' in json_data_2 and json_data_2['translation']:
-                                    results['final_translation'] = json_data_2['translation']
+                                    clean_translation_2 = json_data_2['translation'].strip()
+                                    results['final_translation'] = clean_translation_2
                                     results['json_success'] = True
                                     results['has_artifacts'] = False  # Reset artifacts flag since we got clean JSON
-                                    logger.info("Successfully got clean final translation from JSON")
+                                    logger.info(f"Successfully got clean final translation from JSON: {clean_translation_2}")
+                                    logger.debug(f"Full JSON response: {clean_content_2}")
                                 else:
                                     raise ValueError("No translation in JSON")
-                            except (json.JSONDecodeError, ValueError):
+                            except (json.JSONDecodeError, ValueError) as e:
+                                logger.warning(f"JSON parsing failed for final translation: {e}")
+                                logger.debug(f"Raw content that failed to parse: {clean_content_2}")
                                 results['final_translation'], _ = self.clean_translation_text(full_text_2)
                                 logger.info("JSON parsing failed, using text cleaning for final translation")
                     except Exception as e:
