@@ -151,15 +151,10 @@ class TelegramTranslatorBot:
                 "/config model <model_name> - установить модель перевода\n"
                 "/config stt <model_name> - установить модель распознавания речи\n"
                 "/config show - показать текущие настройки\n\n"
-                "Доступные модели перевода:\n"
-                "• claude-3.5-sonnet\n"
-                "• gpt-4o\n"
-                "• gpt-4o-mini\n"
-                "• gemini-pro-1.5\n"
-                "• llama-3.1-70b-instruct\n\n"
-                "Доступные модели STT:\n"
-                "• whisper-large-v3\n"
-                "• whisper-1",
+                "Доступные модели перевода:\n" +
+                "".join([f"• {m.split('/')[-1]}\n" for m in AVAILABLE_TRANSLATION_MODELS]) +
+                "\nДоступные модели STT:\n" +
+                "".join([f"• {m.split('/')[-1]}\n" for m in AVAILABLE_STT_MODELS]),
                 parse_mode=ParseMode.MARKDOWN
             )
             return
@@ -188,7 +183,7 @@ class TelegramTranslatorBot:
             if not full_model:
                 await update.message.reply_text(
                     f"❌ Модель '{model_name}' не найдена.\n"
-                    "Доступные модели: claude-3.5-sonnet, gpt-4o, gpt-4o-mini, gemini-pro-1.5, llama-3.1-70b-instruct"
+                    f"Доступные модели: {', '.join(m.split('/')[-1] for m in AVAILABLE_TRANSLATION_MODELS)}"
                 )
                 return
             
@@ -209,7 +204,7 @@ class TelegramTranslatorBot:
             if not full_model:
                 await update.message.reply_text(
                     f"❌ Модель STT '{model_name}' не найдена.\n"
-                    "Доступные модели: whisper-large-v3, whisper-1"
+                    f"Доступные модели: {', '.join(m.split('/')[-1] for m in AVAILABLE_STT_MODELS)}"
                 )
                 return
             

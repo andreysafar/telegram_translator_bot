@@ -112,7 +112,7 @@ class OpenRouterService:
                 temperature=0.1,
                 max_tokens=1000
             )
-            
+
             logger.info("Got response from OpenRouter API")
 
             if not response or not response.choices:
@@ -155,7 +155,7 @@ class OpenRouterService:
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
 
             response = self.client.chat.completions.create(
-                    model=model,
+                model=model,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],
@@ -289,7 +289,7 @@ Text to translate: {text}"""
                     results['english_translation'] = full_text
                     results['json_success'] = True  # No artifacts, so it's clean
                     results['has_artifacts'] = False  # Explicitly set to False
-                
+
                 if not results['english_translation']:
                     results['error'] = "Не удалось перевести на английский"
                     return results
@@ -369,7 +369,7 @@ English text to translate: {results['english_translation']}"""
             else:
                 results['error'] = "Не удалось получить ответ от API для финального перевода"
                 return results
-            
+
             # Step 3: Control translation - direct translation back to source language
             if source_lang != target_lang:
                 logger.info(f"Performing direct control translation: {SUPPORTED_LANGUAGES[target_lang]} -> {SUPPORTED_LANGUAGES[source_lang]}")
@@ -399,51 +399,22 @@ English text to translate: {results['english_translation']}"""
             logger.error(f"Translation chain error: {error_msg}")
             results['error'] = f"Ошибка перевода: {error_msg}"
             return results
-
+    
     def speech_to_text(self, audio_file_path: str, model: str) -> Optional[str]:
         """Convert speech to text using Whisper model"""
         try:
-            logger.info(f"Starting speech-to-text with model: {model}")
-            logger.info(f"Audio file path: {audio_file_path}")
-
-            # Check if file exists
-            if not os.path.exists(audio_file_path):
-                logger.error(f"Audio file not found: {audio_file_path}")
-                return None
-
-            # Check file size
-            file_size = os.path.getsize(audio_file_path)
-            logger.info(f"Audio file size: {file_size} bytes")
-
-            if file_size == 0:
-                logger.error("Audio file is empty")
-                return None
-
             with open(audio_file_path, 'rb') as audio_file:
-                logger.info("Sending request to OpenRouter API for speech-to-text")
                 response = self.client.audio.transcriptions.create(
                     model=model,
                     file=audio_file,
                     response_format="text"
                 )
-
-            logger.info(f"Received response from API: {type(response)}")
-            logger.debug(f"Raw response: {response}")
-
+            
             if isinstance(response, str):
-                result = response.strip()
+                return response.strip()
             else:
-                result = str(response).strip()
-
-            if result:
-                logger.info(f"Successfully transcribed audio to text: {result[:100]}...")
-                return result
-            else:
-                logger.warning("Empty transcription result")
-                return None
-
+                return str(response).strip()
+            
         except Exception as e:
             logger.error(f"Speech-to-text error: {e}")
-            logger.error(f"Error type: {type(e)}")
-            logger.error(f"Error details: {str(e)}")
             return None
