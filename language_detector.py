@@ -11,7 +11,22 @@ class LanguageDetector:
     
     def detect_language(self, text: str, user_native_language: str = 'ru') -> str:
         """Detect language of the text with fallback to user's native language"""
-        if not text or len(text.strip()) < 3:
+        if not text or not text.strip():
+            return user_native_language
+
+        # For very short text, try to detect but with more aggressive fallback
+        if len(text.strip()) < 3:
+            # Check for obvious Cyrillic characters
+            cyrillic_chars = set('абвгдеёжзийклмнопрстуфхцчшщъыьэюяАБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ')
+            if any(char in cyrillic_chars for char in text):
+                return 'ru'
+
+            # Check for Thai characters (basic detection)
+            thai_chars = set('กขคงจฉชซฌญฎฏฐฑฒณดตถทธนบปผฝพฟภมยรลวศษสหฬอฮ')
+            if any(char in thai_chars for char in text):
+                return 'th'
+
+            # Default to native language
             return user_native_language
         
         try:

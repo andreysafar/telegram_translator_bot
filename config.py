@@ -11,6 +11,12 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
+# Admin user IDs from environment variable
+admin_ids_str = os.getenv('BOT_ADMIN_IDS', '')
+ADMIN_USER_IDS = [int(id_str.strip()) for id_str in admin_ids_str.split(',') if id_str.strip().isdigit()]
+
+
+
 # Supported languages
 SUPPORTED_LANGUAGES = {
     'ru': 'Russian',
@@ -35,8 +41,4 @@ AVAILABLE_STT_MODELS = [
     "openai/whisper-large-v3",
     "openai/whisper-1"
 ]
-
-# Admin user IDs from environment variable
-admin_ids_str = os.getenv('BOT_ADMIN_IDS', '')
-ADMIN_USER_IDS = [int(id_str.strip()) for id_str in admin_ids_str.split(',') if id_str.strip().isdigit()]
 

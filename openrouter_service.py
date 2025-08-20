@@ -17,6 +17,69 @@ class OpenRouterService:
                 "X-Title": "Telegram Translator Bot"
             }
         )
+
+    def clean_translation_text(self, text: str) -> tuple[str, bool]:
+        """Clean translation text by removing notes, comments, and disclaimers.
+        Returns (cleaned_text, has_artifacts)"""
+        if not text:
+            return text, False
+
+        lines = text.split('\n')
+        cleaned_lines = []
+        has_artifacts = False
+
+        skip_patterns = [
+            'note:', 'note that:', 'please note', 'important:',
+            'disclaimer', 'warning:', 'caution:', 'however,',
+            'however please note', 'but should note', 'ควรสังเกต',
+            'there are some', 'appears to be', 'without meaning',
+            'similar to typing', 'qwerty', 'keyboard layout',
+            'isn\'t a meaningful', 'translation as it\'s',
+            'not an actual word', 'not a real word',
+            'random letters', 'gibberish', 'nonsense',
+            'cannot translate', 'unable to translate',
+            'no meaningful translation', 'no translation available',
+            'meaningless', 'not meaningful', 'not a word',
+            'seems incomplete', 'cut off', 'fragment', 'фрагмент',
+            'неполный', 'обрезанный', 'seems to be part',
+            'for a more accurate', 'would be helpful', 'для более точного',
+            'complete phrase', 'полную фразу'
+        ]
+
+        for line in lines:
+            line_stripped = line.strip()
+
+            # Skip empty lines
+            if not line_stripped:
+                continue
+
+            # Check if line contains skip patterns
+            line_lower = line_stripped.lower()
+            should_skip = False
+
+            for pattern in skip_patterns:
+                if pattern in line_lower:
+                    should_skip = True
+                    has_artifacts = True
+                    break
+
+            if should_skip:
+                continue
+
+            # Skip lines that are just parentheses, brackets, or very short
+            if (line_stripped.startswith('(') and line_stripped.endswith(')') and len(line_stripped) < 50) or \
+               (line_stripped.startswith('[') and line_stripped.endswith(']') and len(line_stripped) < 50) or \
+               len(line_stripped) < 3:
+                has_artifacts = True
+                continue
+
+            cleaned_lines.append(line)
+
+        # If we filtered everything out, return original text
+        if not cleaned_lines:
+            return text.strip(), has_artifacts
+
+        return '\n'.join(cleaned_lines).strip(), has_artifacts
     
     def translate_to_english(self, text: str, source_lang: str, model: str) -> Optional[str]:
         """Translate text to English"""
@@ -24,15 +87,15 @@ class OpenRouterService:
             if not isinstance(text, str) or not text.strip():
                 logger.error(f"Invalid text input: {text}")
                 return None
-            
+
             if source_lang == 'en':
                 return text
-            
+
             prompt = f"Translate to English:\n\n{text}"
-            
+
             logger.info(f"Translating from {SUPPORTED_LANGUAGES[source_lang]} to English")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
-            
+
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -41,23 +104,26 @@ class OpenRouterService:
                 temperature=0.1,
                 max_tokens=1000
             )
-            
+
             logger.info("Got response from OpenRouter API")
-            
+
             if not response or not response.choices:
                 logger.error("Invalid response: no choices")
                 return None
-                
+
             if not response.choices[0].message or not response.choices[0].message.content:
                 logger.error("Invalid response: no content")
                 return None
-                
+
             translated_text = response.choices[0].message.content.strip()
-            
+
+            # Simple cleaning for individual translation calls
+            translated_text, _ = self.clean_translation_text(translated_text)
+
             if not translated_text:
-                logger.error("Got empty translation text")
+                logger.error("Got empty translation text after cleaning")
                 return None
-            
+
             logger.info(f"Successfully translated to English (length: {len(translated_text)})")
             return translated_text
             
@@ -71,15 +137,15 @@ class OpenRouterService:
             if not isinstance(text, str) or not text.strip():
                 logger.error(f"Invalid text input: {text}")
                 return None
-            
+
             if target_lang == 'en':
                 return text
-            
+
             prompt = f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{text}"
-            
+
             logger.info(f"Translating from English to {SUPPORTED_LANGUAGES[target_lang]}")
             logger.debug(f"Text to translate: {text[:100]}..." if len(text) > 100 else f"Text to translate: {text}")
-            
+
             response = self.client.chat.completions.create(
                 model=model,
                 messages=[
@@ -88,23 +154,26 @@ class OpenRouterService:
                 temperature=0.1,
                 max_tokens=1000
             )
-            
+
             logger.info("Got response from OpenRouter API")
-            
+
             if not response or not response.choices:
                 logger.error("Invalid response: no choices")
                 return None
-                
+
             if not response.choices[0].message or not response.choices[0].message.content:
                 logger.error("Invalid response: no content")
                 return None
-                
+
             translated_text = response.choices[0].message.content.strip()
-            
+
+            # Simple cleaning for individual translation calls
+            translated_text, _ = self.clean_translation_text(translated_text)
+
             if not translated_text:
-                logger.error("Got empty translation text")
+                logger.error("Got empty translation text after cleaning")
                 return None
-            
+
             logger.info(f"Successfully translated from English (length: {len(translated_text)})")
             return translated_text
             
@@ -128,6 +197,10 @@ class OpenRouterService:
             'target_language': target_lang,
             'english_translation': None,
             'final_translation': None,
+            'control_translation': None,
+            'has_artifacts': False,
+            'full_response': None,
+            'json_success': False,
             'error': None
         }
         
@@ -146,30 +219,162 @@ class OpenRouterService:
                 return results
             
             # Step 1: Translate to English
-            results['english_translation'] = self.translate_to_english(
-                text, source_lang, translation_model
+            raw_response = self.client.chat.completions.create(
+                model=translation_model,
+                messages=[
+                    {"role": "user", "content": f"Translate to English:\n\n{text}"}
+                ],
+                temperature=0.1,
+                max_tokens=1000
             )
-            
-            if not results['english_translation']:
-                results['error'] = "Не удалось перевести на английский"
+
+            if raw_response.choices and raw_response.choices[0].message:
+                full_text = raw_response.choices[0].message.content.strip()
+                results['full_response'] = full_text
+                _, has_artifacts = self.clean_translation_text(full_text)
+                results['has_artifacts'] = has_artifacts
+
+                # Try to get clean translation via JSON if artifacts detected
+                if has_artifacts:
+                    clean_prompt = f"""Translate to English and return ONLY a JSON object with this exact format:
+{{
+    "translation": "clean translation here",
+    "notes": "any additional notes or comments"
+}}
+
+Text to translate: {text}"""
+
+                    try:
+                        clean_response = self.client.chat.completions.create(
+                            model=translation_model,
+                            messages=[
+                                {"role": "user", "content": clean_prompt}
+                            ],
+                            temperature=0.1,
+                            max_tokens=1000
+                        )
+
+                        if clean_response.choices and clean_response.choices[0].message:
+                            clean_content = clean_response.choices[0].message.content.strip()
+
+                            try:
+                                import json
+                                json_data = json.loads(clean_content)
+                                if 'translation' in json_data and json_data['translation']:
+                                    results['english_translation'] = json_data['translation']
+                                    results['json_success'] = True
+                                    results['has_artifacts'] = False  # Reset artifacts flag since we got clean JSON
+                                    logger.info("Successfully got clean English translation from JSON")
+                                else:
+                                    raise ValueError("No translation in JSON")
+                            except (json.JSONDecodeError, ValueError):
+                                results['english_translation'], _ = self.clean_translation_text(full_text)
+                                logger.info("JSON parsing failed, using text cleaning for English")
+                    except Exception as e:
+                        logger.warning(f"Clean JSON request failed: {e}")
+                        results['english_translation'], _ = self.clean_translation_text(full_text)
+                else:
+                    results['english_translation'] = full_text
+                    results['json_success'] = True  # No artifacts, so it's clean
+                    results['has_artifacts'] = False  # Explicitly set to False
+
+                if not results['english_translation']:
+                    results['error'] = "Не удалось перевести на английский"
+                    return results
+            else:
+                results['error'] = "Не удалось получить ответ от API"
                 return results
             
             logger.info("Successfully translated to English")
             
             # If target is English, we're done
-            if target_lang == 'en':
-                results['final_translation'] = results['english_translation']
-                return results
-            
-            # Step 2: Translate from English to target language
-            results['final_translation'] = self.translate_from_english(
-                results['english_translation'], target_lang, translation_model
+                        # Step 2: Translate from English to target language
+            raw_response_2 = self.client.chat.completions.create(
+                model=translation_model,
+                messages=[
+                    {"role": "user", "content": f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{results['english_translation']}"}
+                ],
+                temperature=0.1,
+                max_tokens=1000
             )
-            
-            if not results['final_translation']:
-                results['error'] = f"Не удалось перевести с английского на {SUPPORTED_LANGUAGES[target_lang]}"
+
+            if raw_response_2.choices and raw_response_2.choices[0].message:
+                full_text_2 = raw_response_2.choices[0].message.content.strip()
+                _, has_artifacts_2 = self.clean_translation_text(full_text_2)
+                results['has_artifacts'] = results['has_artifacts'] or has_artifacts_2
+
+                # Try to get clean translation via JSON if artifacts detected
+                if has_artifacts_2:
+                    clean_prompt_2 = f"""Translate to {SUPPORTED_LANGUAGES[target_lang]} and return ONLY a JSON object with this exact format:
+{{
+    "translation": "clean translation here",
+    "notes": "any additional notes or comments"
+}}
+
+English text to translate: {results['english_translation']}"""
+
+                    try:
+                        clean_response_2 = self.client.chat.completions.create(
+                            model=translation_model,
+                            messages=[
+                                {"role": "user", "content": clean_prompt_2}
+                            ],
+                            temperature=0.1,
+                            max_tokens=1000
+                        )
+
+                        if clean_response_2.choices and clean_response_2.choices[0].message:
+                            clean_content_2 = clean_response_2.choices[0].message.content.strip()
+
+                            try:
+                                import json
+                                json_data_2 = json.loads(clean_content_2)
+                                if 'translation' in json_data_2 and json_data_2['translation']:
+                                    results['final_translation'] = json_data_2['translation']
+                                    results['json_success'] = True
+                                    results['has_artifacts'] = False  # Reset artifacts flag since we got clean JSON
+                                    logger.info("Successfully got clean final translation from JSON")
+                                else:
+                                    raise ValueError("No translation in JSON")
+                            except (json.JSONDecodeError, ValueError):
+                                results['final_translation'], _ = self.clean_translation_text(full_text_2)
+                                logger.info("JSON parsing failed, using text cleaning for final translation")
+                    except Exception as e:
+                        logger.warning(f"Clean JSON request failed for final translation: {e}")
+                        results['final_translation'], _ = self.clean_translation_text(full_text_2)
+                else:
+                    results['final_translation'] = full_text_2
+                    results['json_success'] = True
+                    results['has_artifacts'] = False  # No artifacts, so it's clean
+
+                if not results['final_translation']:
+                    results['error'] = f"Не удалось перевести с английского на {SUPPORTED_LANGUAGES[target_lang]}"
+                    return results
+            else:
+                results['error'] = "Не удалось получить ответ от API для финального перевода"
                 return results
-            
+
+            # Step 3: Control translation - direct translation back to source language
+            if source_lang != target_lang:
+                logger.info(f"Performing direct control translation: {SUPPORTED_LANGUAGES[target_lang]} -> {SUPPORTED_LANGUAGES[source_lang]}")
+
+                control_prompt = f"Translate to {SUPPORTED_LANGUAGES[source_lang]}:\n\n{results['final_translation']}"
+                response = self.client.chat.completions.create(
+                    model=translation_model,
+                    messages=[
+                        {"role": "user", "content": control_prompt}
+                    ],
+                    temperature=0.1,
+                    max_tokens=1000
+                )
+
+                if response.choices and response.choices[0].message and response.choices[0].message.content:
+                    control_text = response.choices[0].message.content.strip()
+                    results['control_translation'], _ = self.clean_translation_text(control_text)
+                    logger.info("Control translation completed successfully")
+                else:
+                    results['control_translation'] = None
+
             logger.info("Translation chain completed successfully")
             return results
             

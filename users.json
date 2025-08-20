@@ -5,5 +5,12 @@
     "translation_model": "anthropic/claude-3.5-sonnet",
     "stt_model": "openai/whisper-large-v3",
     "native_language": "ru"
+  },
+  "39486255": {
+    "user_id": 39486255,
+    "username": null,
+    "translation_model": "anthropic/claude-3.5-sonnet",
+    "stt_model": "openai/whisper-large-v3",
+    "native_language": "ru"
   }
 }

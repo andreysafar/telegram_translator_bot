@@ -1,10 +1,10 @@
 import os
 import logging
 import asyncio
-from telegram import Update
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, 
-    ContextTypes, filters
+    Application, CommandHandler, MessageHandler,
+    CallbackQueryHandler, ContextTypes, filters
 )
 from telegram.constants import ParseMode
 
@@ -429,21 +429,49 @@ class TelegramTranslatorBot:
         # Show target language translation (if not English)
         if target_lang != 'en':
             message_parts.append(f"{FLAGS[target_lang]} {result['final_translation']}")
-        
-        # Add empty line before original text
-        message_parts.append("")
-        
-        # Show original text with flag
-        message_parts.append(f"{FLAGS[source_lang]} {result['original']}")
+
+        # Show control translation if available
+        if result.get('control_translation'):
+            message_parts.append("")
+            message_parts.append("")
+            message_parts.append("")
+            message_parts.append(f"✅ {result['control_translation']}")
+
         
         formatted_message = "\n".join(message_parts)
-        
+
+        # Create keyboard for showing full response only if JSON was successfully obtained
+        keyboard = None
+        if result.get('has_artifacts') and result.get('json_success'):
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("📋 Показать полный ответ с примечаниями", callback_data=f"show_full_{hash(result['original'])}")]
+            ])
+
         await update.message.reply_text(
             formatted_message,
             parse_mode=ParseMode.MARKDOWN,
-            reply_to_message_id=update.message.message_id
+            reply_to_message_id=update.message.message_id,
+            reply_markup=keyboard
         )
-    
+
+    async def handle_show_full_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle show_full callback button"""
+        query = update.callback_query
+        await query.answer()
+
+        # For now, we'll show a message explaining that the full response
+        # would contain the original API response with all artifacts
+        await query.edit_message_text(
+            "📋 **Полный ответ API с примечаниями**\n\n"
+            "⚠️ В этой версии показ полного ответа отключен.\n\n"
+            "Оригинальный ответ API содержал:\n"
+            "• Чистый перевод (который показан выше)\n"
+            "• Дополнительные примечания и комментарии\n"
+            "• Техническую информацию от модели\n\n"
+            "Это было автоматически скрыто для чистоты вывода.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+
     def create_application(self) -> Application:
         """Create and configure the Telegram application"""
         application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
@@ -455,7 +483,10 @@ class TelegramTranslatorBot:
         application.add_handler(CommandHandler("config", self.config_command))
         application.add_handler(CommandHandler("enable", self.enable_command))
         application.add_handler(CommandHandler("disable", self.disable_command))
-        
+
+        # Callback handler for show_full button
+        application.add_handler(CallbackQueryHandler(self.handle_show_full_callback))
+
         # Text message handler (excluding commands)
         application.add_handler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text_message)
