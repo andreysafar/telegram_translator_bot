@@ -43,16 +43,35 @@ class OpenRouterService:
             )
             
             # Log response
-            logger.debug(f"API Response: {response}")
+            logger.info("Got response from OpenRouter API")
+            logger.debug(f"Full API Response: {response}")
             
             # Extract and validate response
-            if not response.choices or not response.choices[0].message:
-                raise ValueError("Invalid response format from API")
+            if not hasattr(response, 'choices'):
+                logger.error("Response has no 'choices' attribute")
+                raise ValueError("Invalid response format: no choices")
+                
+            if not response.choices:
+                logger.error("Response choices is empty")
+                raise ValueError("Invalid response format: empty choices")
+                
+            if not hasattr(response.choices[0], 'message'):
+                logger.error("First choice has no 'message' attribute")
+                logger.debug(f"First choice content: {response.choices[0]}")
+                raise ValueError("Invalid response format: no message")
+                
+            if not hasattr(response.choices[0].message, 'content'):
+                logger.error("Message has no 'content' attribute")
+                logger.debug(f"Message content: {response.choices[0].message}")
+                raise ValueError("Invalid response format: no content")
                 
             translated_text = response.choices[0].message.content
+            
             if not translated_text:
+                logger.error("Got empty translation text")
                 raise ValueError("Empty translation received")
-                
+            
+            logger.info(f"Successfully translated text (length: {len(translated_text)})")
             return translated_text.strip()
             
         except Exception as e:
@@ -90,6 +109,9 @@ class OpenRouterService:
         2. English -> Target language
         3. Target language -> Original (control)
         """
+        logger.info(f"Starting translation chain: {source_lang} -> {target_lang}")
+        logger.info(f"Using model: {translation_model}")
+        logger.debug(f"Input text: {text[:100]}..." if len(text) > 100 else f"Input text: {text}")
         results = {
             'original': text,
             'source_language': source_lang,
@@ -111,35 +133,46 @@ class OpenRouterService:
             
             # Step 1: Translate to English (if not already English)
             if source_lang != 'en':
+                logger.info("Step 1: Translating to English")
                 english_prompt = TRANSLATION_PROMPTS['to_english']
                 results['english_translation'] = self.translate_text(
                     text, translation_model, english_prompt
                 )
                 
                 if not results['english_translation']:
+                    logger.error("Failed to translate to English")
                     results['error'] = "Не удалось перевести на английский"
                     return results
+                logger.info("Successfully translated to English")
             else:
+                logger.info("Source is English, skipping first translation")
                 results['english_translation'] = text
             
             # Step 2: Translate from English to target language (if target is not English)
             if target_lang != 'en':
+                logger.info("Step 2: Translating from English to target language")
                 target_lang_name = SUPPORTED_LANGUAGES[target_lang]
                 from_english_prompt = TRANSLATION_PROMPTS['from_english'].format(
                     target_language=target_lang_name
                 )
+                logger.debug(f"Using prompt template: {from_english_prompt}")
+                
                 results['final_translation'] = self.translate_text(
                     results['english_translation'], translation_model, from_english_prompt
                 )
                 
                 if not results['final_translation']:
+                    logger.error("Failed to translate from English to target language")
                     results['error'] = "Не удалось перевести с английского"
                     return results
+                logger.info("Successfully translated to target language")
             else:
+                logger.info("Target is English, using English translation as final")
                 results['final_translation'] = results['english_translation']
             
             # Step 3: Control translation (translate back to original language)
             if source_lang != target_lang:
+                logger.info("Step 3: Performing control translation back to source language")
                 source_lang_name = SUPPORTED_LANGUAGES[source_lang]
                 target_lang_name = SUPPORTED_LANGUAGES[target_lang]
                 
@@ -147,14 +180,25 @@ class OpenRouterService:
                     source_language=target_lang_name,
                     target_language=source_lang_name
                 )
+                logger.debug(f"Using control prompt template: {control_prompt}")
+                
                 results['control_translation'] = self.translate_text(
                     results['final_translation'], translation_model, control_prompt
                 )
+                
+                if results['control_translation']:
+                    logger.info("Successfully completed control translation")
+                else:
+                    logger.warning("Control translation failed, but continuing as it's optional")
+            else:
+                logger.info("Source and target languages are the same, skipping control translation")
             
             # Validate final results
             if not results['final_translation']:
+                logger.error("Final translation is missing")
                 raise ValueError("Не получен финальный перевод")
             
+            logger.info("Translation chain completed successfully")
             return results
             
         except Exception as e:
