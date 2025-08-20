@@ -138,14 +138,12 @@ class TelegramTranslatorBot:
         user = update.effective_user
         chat = update.effective_chat
         
-        # Check if user is admin
-        if chat.type != 'private':
-            chat_member = await context.bot.get_chat_member(chat.id, user.id)
-            if chat_member.status not in ['administrator', 'creator']:
-                await update.message.reply_text(
-                    "❌ Команда /config доступна только администраторам группы"
-                )
-                return
+        # Check if user is in admin list
+        if user.id not in ADMIN_USER_IDS:
+            await update.message.reply_text(
+                "❌ Команда /config доступна только администраторам"
+            )
+            return
         
         if not context.args:
             await update.message.reply_text(
