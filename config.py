@@ -26,7 +26,7 @@ SUPPORTED_LANGUAGES = {
 
 # Default models
 DEFAULT_TRANSLATION_MODEL = "anthropic/claude-3.5-sonnet"
-DEFAULT_STT_MODEL = "google/gemini-2.0-flash-lite-001"
+DEFAULT_STT_MODEL = "openai/whisper-large-v3"
 
 # Available models for user selection
 AVAILABLE_TRANSLATION_MODELS = [
@@ -38,6 +38,11 @@ AVAILABLE_TRANSLATION_MODELS = [
 ]
 
 AVAILABLE_STT_MODELS = [
-    "google/gemini-2.0-flash-lite-001",
+    "openai/whisper-large-v3",
+    "openai/whisper-1",
+    "openai/whisper-1-tiny",
+    "openai/whisper-1-base",
+    "openai/whisper-1-small",
+    "openai/whisper-1-medium"
 ]
 
