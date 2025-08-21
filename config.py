@@ -26,7 +26,7 @@ SUPPORTED_LANGUAGES = {
 
 # Default models
 DEFAULT_TRANSLATION_MODEL = "anthropic/claude-3.5-sonnet"
-DEFAULT_STT_MODEL = "anthropic/claude-3-opus"  # Supports audio input
+DEFAULT_STT_MODEL = "google/gemini-2.0-flash-001"
 
 # Available models for user selection
 AVAILABLE_TRANSLATION_MODELS = [
@@ -38,8 +38,7 @@ AVAILABLE_TRANSLATION_MODELS = [
 ]
 
 AVAILABLE_STT_MODELS = [
-    "anthropic/claude-3-opus",  # Best audio support
-    "anthropic/claude-3-sonnet",
-    "anthropic/claude-3-haiku"
+    "google/gemini-2.0-flash-001",
+
 ]
 

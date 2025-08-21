@@ -1,7 +1,7 @@
 import os
 import logging
 import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ForceReply
 from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     CallbackQueryHandler, ContextTypes, filters
@@ -12,6 +12,8 @@ from config import *
 from user_storage import UserStorage
 from openrouter_service import OpenRouterService
 from language_detector import LanguageDetector
+from messages import get_message
+from tts_service import TTSService
 
 # Configure logging
 logging.basicConfig(
@@ -25,9 +27,13 @@ class TelegramTranslatorBot:
         self.user_storage = UserStorage()
         self.openrouter_service = OpenRouterService()
         self.language_detector = LanguageDetector()
+        self.tts_service = TTSService()
         
         # Group chat enable list (admin can add/remove groups)
         self.enabled_groups = set()
+        
+        # Store last translations for playback/edit
+        self.last_translations = {}
         
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
@@ -39,124 +45,92 @@ class TelegramTranslatorBot:
         if user.username:
             self.user_storage.update_user(user.id, username=user.username)
         
-        if chat.type == 'private':
-            welcome_message = f"""
-🤖 Привет, {user.first_name}!
-
-Я бот-переводчик для групповых чатов. Поддерживаю переводы между:
-🇷🇺 Русским
-🇹🇭 Тайским  
-🇬🇧 Английским
-
-**Как я работаю:**
-1. Получаю сообщение и определяю язык
-2. Перевожу через OpenRouter API
-3. Отправляю результат
-
-**Команды:**
-/lang <ru|th|en> - установить родной язык
-/help - справка
-
-**Для администраторов бота:**
-/config - настройки бота (только для админов бота)
-/enable - включить бота в группе (только для админов бота)
-/disable - выключить бота в группе (только для админов бота)
-
-Добавьте меня в групповой чат и я буду переводить все сообщения!
-            """
-        else:
-            welcome_message = f"""
-🤖 Бот-переводчик запущен в группе!
-
-Для работы бота администратор бота должен выполнить команду /enable
-            """
+        # Get user's language
+        user_lang = user_settings.get('native_language', 'en')
         
-        await update.message.reply_text(welcome_message)
+        # Get appropriate message
+        welcome_message = get_message('start', user_lang)
+        
+        await update.message.reply_text(welcome_message, parse_mode=ParseMode.MARKDOWN)
     
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
-        help_text = """
-🆘 **Справка по боту-переводчику**
-
-**Основные функции:**
-• Автоматический перевод сообщений в групповых чатах
-• Поддержка русского, тайского и английского языков
-• Обработка голосовых сообщений
-
-**Команды для пользователей:**
-/start - информация о боте
-/lang <ru|th|en> - установить родной язык
-/help - эта справка
-
-**Команды для администраторов бота:**
-/config - настройки модели (только админы бота)
-/enable - включить бота в группе (только админы бота)
-/disable - выключить бота в группе (только админы бота)
-
-**Как работает перевод:**
-1. 📥 Получаю ваше сообщение
-2. 🔍 Определяю язык (русский/тайский/английский)
-3. 🔄 Перевожу через OpenRouter API
-4. 📤 Отправляю результат
-
-Просто добавьте меня в групповой чат и включите командой /enable!
-        """
+        user = update.effective_user
+        user_settings = self.user_storage.get_user(user.id)
+        user_lang = user_settings.get('native_language', 'en')
         
+        help_text = get_message('help', user_lang)
         await update.message.reply_text(help_text, parse_mode=ParseMode.MARKDOWN)
     
     async def lang_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /lang command to set native language"""
         user = update.effective_user
+        user_settings = self.user_storage.get_user(user.id)
+        user_lang = user_settings.get('native_language', 'en')
         
-        if not context.args:
-            await update.message.reply_text(
-                "Использование: /lang <ru|th|en>\n\n"
-                "Примеры:\n"
-                "/lang ru - русский\n"
-                "/lang th - тайский\n"
-                "/lang en - английский"
-            )
+        # If language code provided as argument, process it
+        if context.args:
+            lang_code = context.args[0].lower()
+            if lang_code in SUPPORTED_LANGUAGES:
+                self.user_storage.set_native_language(user.id, lang_code)
+                success_text = get_message('lang_success', lang_code).format(
+                    lang_name=SUPPORTED_LANGUAGES[lang_code]
+                )
+                await update.message.reply_text(success_text, parse_mode=ParseMode.MARKDOWN)
             return
         
-        lang_code = context.args[0].lower()
-        if lang_code not in SUPPORTED_LANGUAGES:
-            await update.message.reply_text(
-                f"❌ Неподдерживаемый язык: {lang_code}\n"
-                "Доступные языки: ru, th, en"
-            )
-            return
+        # Create language selection keyboard
+        keyboard = [
+            [
+                InlineKeyboardButton("🇷🇺 Русский", callback_data="lang_ru"),
+                InlineKeyboardButton("🇹🇭 ไทย", callback_data="lang_th"),
+                InlineKeyboardButton("🇬🇧 English", callback_data="lang_en")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        self.user_storage.set_native_language(user.id, lang_code)
-        lang_name = SUPPORTED_LANGUAGES[lang_code]
+        # Send message in all supported languages
+        help_text = "\n\n".join([
+            get_message('lang_help', lang).format(
+                current_lang=SUPPORTED_LANGUAGES[user_lang]
+            ) for lang in ['ru', 'th', 'en']
+        ])
         
         await update.message.reply_text(
-            f"✅ Родной язык установлен: {lang_name}"
+            help_text,
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=reply_markup
         )
     
     async def config_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /config command - admin only"""
+        """Handle /config command"""
         user = update.effective_user
+        user_settings = self.user_storage.get_user(user.id)
+        user_lang = user_settings.get('native_language', 'en')
         
-        # Check if user is bot admin
-        if user.id not in ADMIN_USER_IDS:
-            await update.message.reply_text(
-                "❌ Команда /config доступна только администраторам бота"
-            )
-            return
-        
+        # Get base config message
         if not context.args:
-            await update.message.reply_text(
-                "⚙️ **Настройки бота (только для администраторов)**\n\n"
-                "Команды:\n"
-                "/config model <model_name> - установить модель перевода\n"
-                "/config stt <model_name> - установить модель распознавания речи\n"
-                "/config show - показать текущие настройки\n\n"
-                "Доступные модели перевода:\n" +
-                "".join([f"• {m.split('/')[-1]}\n" for m in AVAILABLE_TRANSLATION_MODELS]) +
-                "\nДоступные модели STT:\n" +
-                "".join([f"• {m.split('/')[-1]}\n" for m in AVAILABLE_STT_MODELS]),
-                parse_mode=ParseMode.MARKDOWN
+            # Determine if user is admin
+            is_admin = user.id in ADMIN_USER_IDS
+            
+            # Get appropriate section
+            admin_section = get_message('config_admin_section' if is_admin else 'config_non_admin_section', user_lang)
+            admin_commands = get_message('config_admin_commands', user_lang) if is_admin else ""
+            
+            # Format config message
+            config_text = get_message('config', user_lang).format(
+                admin_section=admin_section,
+                native_lang=SUPPORTED_LANGUAGES[user_lang],
+                translation_model=user_settings['translation_model'].split('/')[-1],
+                stt_model=user_settings['stt_model'].split('/')[-1],
+                admin_commands=admin_commands
             )
+            
+            await update.message.reply_text(config_text, parse_mode=ParseMode.MARKDOWN)
+            return
+            
+        # Only admins can proceed past this point
+        if user.id not in ADMIN_USER_IDS:
             return
         
         action = context.args[0].lower()
@@ -279,6 +253,51 @@ class TelegramTranslatorBot:
         # For group chats, check if bot is enabled
         if chat.type != 'private' and chat.id not in self.enabled_groups:
             return
+            
+        # Check if this is a reply to edit request
+        if update.message.reply_to_message and 'editing_translation' in context.user_data:
+            translation_hash = context.user_data['editing_translation']
+            translation = self.last_translations.get(translation_hash)
+            
+            if translation:
+                # Show typing indicator
+                await context.bot.send_chat_action(
+                    chat_id=update.effective_chat.id,
+                    action="typing"
+                )
+                
+                # Get user settings
+                user_settings = self.user_storage.get_user(user.id)
+                
+                # Perform new translation with correction prompt
+                translation_result = self.openrouter_service.perform_translation_chain(
+                    text=translation['original'],
+                    source_lang=translation['source_lang'],
+                    target_lang=translation['lang'],
+                    translation_model=user_settings['translation_model'],
+                    correction_prompt=text
+                )
+                
+                if translation_result.get('error'):
+                    await update.message.reply_text(
+                        f"❌ Ошибка перевода: {translation_result['error']}"
+                    )
+                    return
+                
+                try:
+                    # Try to delete previous translation message if possible
+                    if (update.message.reply_to_message and 
+                        update.message.reply_to_message.reply_to_message):
+                        await update.message.reply_to_message.reply_to_message.delete()
+                except Exception as e:
+                    logger.warning(f"Failed to delete previous message: {e}")
+                
+                # Send new translation
+                await self.send_translation_result(update, translation_result)
+                
+                # Clear editing context
+                del context.user_data['editing_translation']
+                return
         
         # Get user settings
         user_settings = self.user_storage.get_user(user.id)
@@ -428,44 +447,140 @@ class TelegramTranslatorBot:
         # Show control translation if available
         if result.get('control_translation'):
             message_parts.append("")
-            message_parts.append("")
-            message_parts.append("")
             message_parts.append(f"✅ {result['control_translation']}")
 
         
         formatted_message = "\n".join(message_parts)
 
-        # Create keyboard for showing full response only if JSON was successfully obtained
-        keyboard = None
+        # Store translation for playback/edit
+        translation_hash = hash(result['original'])
+        self.last_translations[translation_hash] = {
+            'text': result['final_translation'],
+            'lang': target_lang,
+            'original': result['original'],
+            'source_lang': source_lang
+        }
+
+        # Create keyboard with action buttons
+        keyboard_buttons = [
+            [
+                InlineKeyboardButton("🎵", callback_data=f"play_{translation_hash}"),
+                InlineKeyboardButton("✏️", callback_data=f"edit_{translation_hash}")
+            ]
+        ]
+        
+        # Add show_full button if needed
         if result.get('has_artifacts') and result.get('json_success'):
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("📋 Показать полный ответ с примечаниями", callback_data=f"show_full_{hash(result['original'])}")]
+            keyboard_buttons.append([
+                InlineKeyboardButton("📋 Показать полный ответ с примечаниями", callback_data=f"show_full_{translation_hash}")
             ])
+
+        keyboard = InlineKeyboardMarkup(keyboard_buttons)
 
         await update.message.reply_text(
             formatted_message,
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
             reply_to_message_id=update.message.message_id,
             reply_markup=keyboard
         )
 
-    async def handle_show_full_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle show_full callback button"""
+    async def handle_callback_query(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle all callback buttons"""
         query = update.callback_query
         await query.answer()
-
-        # For now, we'll show a message explaining that the full response
-        # would contain the original API response with all artifacts
-        await query.edit_message_text(
-            "📋 **Полный ответ API с примечаниями**\n\n"
-            "⚠️ В этой версии показ полного ответа отключен.\n\n"
-            "Оригинальный ответ API содержал:\n"
-            "• Чистый перевод (который показан выше)\n"
-            "• Дополнительные примечания и комментарии\n"
-            "• Техническую информацию от модели\n\n"
-            "Это было автоматически скрыто для чистоты вывода.",
-            parse_mode=ParseMode.MARKDOWN
-        )
+        
+        # Parse callback data
+        data = query.data
+        
+        if data.startswith('lang_'):
+            # Handle language selection
+            lang_code = data.split('_')[1]
+            if lang_code in SUPPORTED_LANGUAGES:
+                user = update.effective_user
+                self.user_storage.set_native_language(user.id, lang_code)
+                
+                # Send confirmation in the new language
+                success_text = get_message('lang_success', lang_code).format(
+                    lang_name=SUPPORTED_LANGUAGES[lang_code]
+                )
+                await query.message.edit_text(
+                    success_text,
+                    parse_mode=ParseMode.MARKDOWN
+                )
+            return
+            
+        elif data.startswith('show_full_'):
+            # Handle show_full button
+            await query.edit_message_text(
+                "📋 **Полный ответ API с примечаниями**\n\n"
+                "⚠️ В этой версии показ полного ответа отключен.\n\n"
+                "Оригинальный ответ API содержал:\n"
+                "• Чистый перевод (который показан выше)\n"
+                "• Дополнительные примечания и комментарии\n"
+                "• Техническую информацию от модели\n\n"
+                "Это было автоматически скрыто для чистоты вывода.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        
+        elif data.startswith('play_'):
+            # Handle play button
+            translation_hash = int(data.split('_')[1])
+            translation = self.last_translations.get(translation_hash)
+            
+            if not translation:
+                await query.message.reply_text("❌ Перевод не найден")
+                return
+            
+            # Show typing indicator
+            await context.bot.send_chat_action(
+                chat_id=update.effective_chat.id,
+                action="record_voice"
+            )
+            
+            # Convert text to speech
+            audio_path = self.tts_service.text_to_speech(
+                translation['text'],
+                translation['lang']
+            )
+            
+            if not audio_path:
+                await query.message.reply_text("❌ Не удалось создать аудио")
+                return
+            
+            # Send voice message
+            try:
+                with open(audio_path, 'rb') as audio:
+                    await context.bot.send_voice(
+                        chat_id=update.effective_chat.id,
+                        voice=audio,
+                        reply_to_message_id=query.message.message_id
+                    )
+            finally:
+                # Clean up audio file
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+        
+        elif data.startswith('edit_'):
+            # Handle edit button
+            translation_hash = int(data.split('_')[1])
+            translation = self.last_translations.get(translation_hash)
+            
+            if not translation:
+                await query.message.reply_text("❌ Перевод не найден")
+                return
+            
+            # Get user's language for prompts
+            user_settings = self.user_storage.get_user(update.effective_user.id)
+            user_lang = user_settings.get('native_language', 'en')
+            
+            # Ask for correction
+            await query.message.reply_text(
+                get_message('edit_prompt', user_lang),
+                reply_markup=ForceReply(selective=True)
+            )
+            
+            # Store context for the next message
+            context.user_data['editing_translation'] = translation_hash
 
     def create_application(self) -> Application:
         """Create and configure the Telegram application"""
@@ -479,8 +594,8 @@ class TelegramTranslatorBot:
         application.add_handler(CommandHandler("enable", self.enable_command))
         application.add_handler(CommandHandler("disable", self.disable_command))
 
-        # Callback handler for show_full button
-        application.add_handler(CallbackQueryHandler(self.handle_show_full_callback))
+        # Callback handler for all buttons
+        application.add_handler(CallbackQueryHandler(self.handle_callback_query))
 
         # Text message handler (excluding commands)
         application.add_handler(
@@ -499,6 +614,11 @@ class TelegramTranslatorBot:
         application = self.create_application()
         
         logger.info("Starting Telegram Translator Bot...")
+        
+        # Initialize TTS models
+        logger.info("Initializing TTS models...")
+        if not self.tts_service.initialize_models():
+            logger.error("Failed to initialize TTS models. Voice playback will be unavailable.")
         
         # Start the bot
         await application.initialize()

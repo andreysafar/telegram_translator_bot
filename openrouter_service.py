@@ -191,7 +191,7 @@ class OpenRouterService:
             return None
     
     def perform_translation_chain(self, text: str, source_lang: str, target_lang: str, 
-                                translation_model: str) -> Dict[str, str]:
+                                translation_model: str, correction_prompt: str = None) -> Dict[str, str]:
         """
         Perform two-step translation:
         1. Source language -> English
@@ -302,10 +302,14 @@ Text to translate: {text}"""
             
             # If target is English, we're done
                         # Step 2: Translate from English to target language
+            prompt = f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{results['english_translation']}"
+            if correction_prompt:
+                prompt += f"\n\nPlease consider this feedback for the translation: {correction_prompt}"
+            
             raw_response_2 = self.client.chat.completions.create(
                 model=translation_model,
                 messages=[
-                    {"role": "user", "content": f"Translate to {SUPPORTED_LANGUAGES[target_lang]}:\n\n{results['english_translation']}"}
+                    {"role": "user", "content": prompt}
                 ],
                 temperature=0.1,
                 max_tokens=1000
@@ -387,7 +391,45 @@ English text to translate: {results['english_translation']}"""
 
                 if response.choices and response.choices[0].message and response.choices[0].message.content:
                     control_text = response.choices[0].message.content.strip()
-                    results['control_translation'], _ = self.clean_translation_text(control_text)
+                    
+                    # Try to get clean control translation via JSON
+                    clean_prompt = f"""Translate to {SUPPORTED_LANGUAGES[source_lang]} and return ONLY a JSON object with this exact format:
+{{
+    "translation": "clean translation here",
+    "notes": "any additional notes or comments"
+}}
+
+Text to translate: {results['final_translation']}"""
+
+                    try:
+                        clean_response = self.client.chat.completions.create(
+                            model=translation_model,
+                            messages=[
+                                {"role": "user", "content": clean_prompt}
+                            ],
+                            temperature=0.1,
+                            max_tokens=1000
+                        )
+
+                        if clean_response.choices and clean_response.choices[0].message:
+                            clean_content = clean_response.choices[0].message.content.strip()
+
+                            try:
+                                import json
+                                json_data = json.loads(clean_content)
+                                if 'translation' in json_data and json_data['translation']:
+                                    clean_translation = json_data['translation'].strip()
+                                    results['control_translation'] = clean_translation
+                                    logger.info(f"Successfully got clean control translation from JSON")
+                                else:
+                                    raise ValueError("No translation in JSON")
+                            except (json.JSONDecodeError, ValueError) as e:
+                                logger.warning(f"JSON parsing failed for control translation: {e}")
+                                results['control_translation'], _ = self.clean_translation_text(control_text)
+                    except Exception as e:
+                        logger.warning(f"Clean JSON request failed for control translation: {e}")
+                        results['control_translation'], _ = self.clean_translation_text(control_text)
+                    
                     logger.info("Control translation completed successfully")
                 else:
                     results['control_translation'] = None
